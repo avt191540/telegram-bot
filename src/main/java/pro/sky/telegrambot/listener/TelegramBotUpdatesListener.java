@@ -66,12 +66,18 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
     private NotificationTask parseMessage(String botMessage) {
         Pattern pattern = Pattern.compile("([0-9\\.\\:\\s]{16})(\\s)([\\W+]+)");
         Matcher matcher = pattern.matcher(botMessage);
-        NotificationTask taskFromMessage;
-        if (matcher.find()) {
-            LocalDateTime messageDateTime = LocalDateTime.parse(matcher.group(1), DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
-            String messageText = matcher.group(3);
+        NotificationTask taskFromMessage = null;
+        try {
+            if (matcher.find()) {
+                LocalDateTime messageDateTime = LocalDateTime.parse(matcher.group(1), DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                String messageText = matcher.group(3);
             taskFromMessage = new NotificationTask(messageText, messageDateTime);
+//                taskFromMessage = new NotificationTask();
+            }
+        } catch (Exception e) {
+            logger.error("Incorrect to parse botMessage: " + botMessage, e);
         }
+        return taskFromMessage;
     }
 
 }
