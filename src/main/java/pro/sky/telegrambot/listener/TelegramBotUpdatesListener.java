@@ -7,6 +7,7 @@ import com.pengrad.telegrambot.model.Update;
 import com.pengrad.telegrambot.request.SendMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import pro.sky.telegrambot.model.NotificationTask;
 import pro.sky.telegrambot.repository.NotificationRepository;
@@ -15,6 +16,7 @@ import javax.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,16 +26,8 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
 
     private Logger logger = LoggerFactory.getLogger(TelegramBotUpdatesListener.class);
 
-//    @Autowired
     private TelegramBot telegramBot;
     private final NotificationRepository repository;
-//    private NotificationService notificationService;
-//
-//    public TelegramBotUpdatesListener(TelegramBot telegramBot, NotificationService notificationService) {
-//        this.telegramBot = telegramBot;
-//        this.notificationService = notificationService;
-//    }
-
 
     public TelegramBotUpdatesListener(TelegramBot telegramBot, NotificationRepository repository) {
         this.telegramBot = telegramBot;
@@ -51,13 +45,9 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
             logger.info("Processing update: {}", update);
             Message message = update.message();
             if (message.text().startsWith("/start")) {
-                logger.info("start has been received");
-                sendMessage(message.chat().id(), "Hi, how are you?");
+                logger.info("Start command has been received");
                 LocalDateTime dateTimeNow = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-                sendMessage(message.chat().id(), dateTimeNow.toString());
-
-//                SendMessage sendMessage = new SendMessage(message.chat().id(), "Hi, how are you?");
-//                telegramBot.execute(sendMessage);
+                sendMessage(message.chat().id(), "Hi, how are you? Current date and time: " + dateTimeNow.toString());
             } else {
                 NotificationTask parsMessageResult = parseMessage(message.text());
                 if (parsMessageResult != null && parsMessageResult.getNotificationDate().isAfter(LocalDateTime.now())) {
@@ -65,16 +55,8 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
                 } else {
                     sendMessage(message.chat().id(), "Incorrect notification please try again");
                 }
-
-//                SendMessage sendMessage = new SendMessage(message.chat().id(), "I'm waiting for a start");
-//                telegramBot.execute(sendMessage);
             }
-
         }
-//        updates.forEach(update -> {
-//            logger.info("Processing update: {}", update);
-//            // Process your updates here
-//        });
         return UpdatesListener.CONFIRMED_UPDATES_ALL;
     }
 
@@ -87,7 +69,6 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
                 LocalDateTime messageDateTime = LocalDateTime.parse(matcher.group(1), DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
                 String messageText = matcher.group(3);
                 taskFromMessage = new NotificationTask(messageText, messageDateTime);
-//                taskFromMessage = new NotificationTask();
             }
         } catch (Exception e) {
             logger.error("Incorrect to parse botMessage: " + botMessage, e);
@@ -108,4 +89,18 @@ public class TelegramBotUpdatesListener implements UpdatesListener {
         return recordedTask;
     }
 
+    @Scheduled(cron = "0 0/1 * * * *")
+    public void sendingTasksToUsers() {
+        logger.info("Checking tasks to sending");
+        LocalDateTime dateTimeNow = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        Collection<NotificationTask> sentTasks = repository.getNotificationTasksByNotificationDateEquals(dateTimeNow);
+        if (sentTasks.size() != 0) {
+            logger.info("Total tasks found to send: " + sentTasks.size());
+            for (NotificationTask sentTask : sentTasks) {
+                sendMessage(sentTask.getChatId(), sentTask.getNotificationText());
+                sentTask.setExecuted(true);
+            }
+            repository.saveAll(sentTasks);
+        }
+    }
 }
